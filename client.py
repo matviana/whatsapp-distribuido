@@ -27,10 +27,18 @@ def receive_messages(client):
             elif data["tipo"] == "status":
                 print(f"[STATUS] Mensagem {data['id']} -> {data['status']}")
 
-        except Exception as e:
+            
+            elif data["tipo"] == "historico":
+                print("\n--- HISTÓRICO ---")
+                for msg in data["mensagens"]:
+                    print(f"[{msg['de']}] {msg['conteudo']}")
+                print("-----------------\n")
+
+        except:
             print("[DESCONECTADO DO SERVIDOR]")
             client.close()
             break
+
 
 def start_client():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,19 +49,41 @@ def start_client():
 
     threading.Thread(target=receive_messages, args=(client,), daemon=True).start()
 
+    print("\nDigite mensagens normalmente ou use:")
+    print("/historico <telefone>\n")
+
     while True:
-        para = input("Enviar para (telefone): ")
-        conteudo = input("Mensagem: ")
+        entrada = input()
 
-        mensagem = {
-            "tipo": "mensagem",
-            "id": str(time.time()),
-            "de": telefone,
-            "para": para,
-            "conteudo": conteudo,
-            "status": "ENVIADA"
-        }
+        
+        if entrada.startswith("/historico"):
+            try:
+                _, destino = entrada.split()
 
-        client.send(json.dumps(mensagem).encode())
+                requisicao = {
+                    "tipo": "historico",
+                    "com": destino
+                }
+
+                client.send(json.dumps(requisicao).encode())
+
+            except:
+                print("Uso correto: /historico 222")
+
+        
+        else:
+            para = input("Enviar para (telefone): ")
+
+            mensagem = {
+                "tipo": "mensagem",
+                "id": str(time.time()),
+                "de": telefone,
+                "para": para,
+                "conteudo": entrada,
+                "status": "ENVIADA"
+            }
+
+            client.send(json.dumps(mensagem).encode())
+
 
 start_client()

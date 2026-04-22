@@ -86,3 +86,29 @@ def buscar_remetente(id_msg):
     conn.close()
 
     return result[0] if result else None
+
+
+def buscar_conversa(user1, user2):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT remetente, destinatario, conteudo
+    FROM mensagens
+    WHERE (remetente = ? AND destinatario = ?)
+    OR (remetente = ? AND destinatario = ?)
+    ORDER BY rowid ASC
+    """, (user1, user2, user2, user1))
+
+    resultados = cursor.fetchall()
+    conn.close()
+
+    mensagens = []
+    for r in resultados:
+        mensagens.append({
+            "de": r[0],
+            "para": r[1],
+            "conteudo": r[2]
+        })
+
+    return mensagens
