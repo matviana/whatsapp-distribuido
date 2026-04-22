@@ -12,22 +12,18 @@ def receive_messages(client):
             msg = client.recv(1024).decode()
             data = json.loads(msg)
 
-            # =========================
-            # 📩 MENSAGEM RECEBIDA
-            # =========================
+            
             if data["tipo"] == "mensagem":
                 print(f"\n[{data['de']}] {data['conteudo']}")
 
-                # envia confirmação de leitura
+                
                 confirmacao = {
                     "tipo": "lido",
                     "id": data["id"]
                 }
                 client.send(json.dumps(confirmacao).encode())
 
-            # =========================
-            # 🔄 STATUS DA MENSAGEM
-            # =========================
+            
             elif data["tipo"] == "status":
                 print(f"[STATUS] Mensagem {data['id']} -> {data['status']}")
 
@@ -51,7 +47,7 @@ def start_client():
 
         mensagem = {
             "tipo": "mensagem",
-            "id": str(time.time()),  # ID único
+            "id": str(time.time()),
             "de": telefone,
             "para": para,
             "conteudo": conteudo,

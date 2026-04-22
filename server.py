@@ -8,7 +8,7 @@ database.criar_tabelas()
 HOST = '0.0.0.0'
 PORT = 12345
 
-clients = {}  # telefone -> socket
+clients = {}  
 clients_lock = threading.Lock()
 
 
@@ -25,9 +25,7 @@ def handle_client(conn, addr):
 
         print(f"[USUÁRIO CONECTADO] {telefone}")
 
-        # =========================
-        #  ENVIAR MENSAGENS PENDENTES
-        # =========================
+        
         pendentes = database.buscar_pendentes(telefone)
 
         for msg in pendentes:
@@ -57,29 +55,29 @@ def handle_client(conn, addr):
 
             data = json.loads(msg)
 
-            # =========================
-            #  ENVIO DE MENSAGEM
-            # =========================
+            
+            #  envio
+            
             if data["tipo"] == "mensagem":
                 destinatario = data["para"]
 
                 data["status"] = "ENVIADA"
 
-                # 🔥 salva no banco
+                
                 database.salvar_mensagem(data)
 
                 with clients_lock:
                     if destinatario in clients:
-                        # ENTREGUE
+                        
                         data["status"] = "ENTREGUE"
 
-                        # envia para destinatário
+                        
                         clients[destinatario].send(json.dumps(data).encode())
 
-                        # atualiza no banco
+                        
                         database.atualizar_status(data["id"], "ENTREGUE")
 
-                        # confirma para remetente
+                        
                         confirmacao = {
                             "tipo": "status",
                             "id": data["id"],
@@ -90,7 +88,7 @@ def handle_client(conn, addr):
                         print(f"[ENTREGUE] {telefone} -> {destinatario}")
 
                     else:
-                        # offline → já está como ENVIADA no banco
+                        
                         confirmacao = {
                             "tipo": "status",
                             "id": data["id"],
@@ -100,16 +98,16 @@ def handle_client(conn, addr):
 
                         print(f"[OFFLINE] {destinatario}")
 
-            # =========================
-            #  CONFIRMAÇÃO DE LEITURA
-            # =========================
+            
+            #  confirmação
+            
             elif data["tipo"] == "lido":
                 id_msg = data["id"]
 
-                # 🔥 atualiza no banco
+                
                 database.atualizar_status(id_msg, "LIDO")
 
-                # 🔥 buscar remetente da mensagem
+                
                 remetente = database.buscar_remetente(id_msg)
 
                 if remetente and remetente in clients:
