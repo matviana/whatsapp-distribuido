@@ -1,12 +1,16 @@
 import socket
 import threading
+import json
+import database
+
+database.criar_tabelas()
 
 HOST = '0.0.0.0'
 PORT = 12345
 
 clients = {}  # telefone -> socket
+clients_lock = threading.Lock()
 
-import json
 
 def handle_client(conn, addr):
     print(f"[NOVA CONEXÃO] {addr}")
@@ -15,9 +19,35 @@ def handle_client(conn, addr):
 
     try:
         telefone = conn.recv(1024).decode()
-        clients[telefone] = conn
+
+        with clients_lock:
+            clients[telefone] = conn
 
         print(f"[USUÁRIO CONECTADO] {telefone}")
+
+        # =========================
+        #  ENVIAR MENSAGENS PENDENTES
+        # =========================
+        pendentes = database.buscar_pendentes(telefone)
+
+        for msg in pendentes:
+            try:
+                conn.send(json.dumps(msg).encode())
+                database.atualizar_status(msg["id"], "ENTREGUE")
+
+                # avisar remetente que foi entregue
+                if msg["de"] in clients:
+                    confirmacao = {
+                        "tipo": "status",
+                        "id": msg["id"],
+                        "status": "ENTREGUE"
+                    }
+                    clients[msg["de"]].send(json.dumps(confirmacao).encode())
+
+                print(f"[PENDENTE ENTREGUE] {msg['de']} -> {telefone}")
+
+            except:
+                pass
 
         while True:
             msg = conn.recv(1024).decode()
@@ -27,14 +57,71 @@ def handle_client(conn, addr):
 
             data = json.loads(msg)
 
+            # =========================
+            #  ENVIO DE MENSAGEM
+            # =========================
             if data["tipo"] == "mensagem":
                 destinatario = data["para"]
 
-                if destinatario in clients:
-                    clients[destinatario].send(msg.encode())
-                    print(f"[ENTREGUE] {telefone} -> {destinatario}")
-                else:
-                    print(f"[OFFLINE] {destinatario}")
+                data["status"] = "ENVIADA"
+
+                # 🔥 salva no banco
+                database.salvar_mensagem(data)
+
+                with clients_lock:
+                    if destinatario in clients:
+                        # ENTREGUE
+                        data["status"] = "ENTREGUE"
+
+                        # envia para destinatário
+                        clients[destinatario].send(json.dumps(data).encode())
+
+                        # atualiza no banco
+                        database.atualizar_status(data["id"], "ENTREGUE")
+
+                        # confirma para remetente
+                        confirmacao = {
+                            "tipo": "status",
+                            "id": data["id"],
+                            "status": "ENTREGUE"
+                        }
+                        clients[telefone].send(json.dumps(confirmacao).encode())
+
+                        print(f"[ENTREGUE] {telefone} -> {destinatario}")
+
+                    else:
+                        # offline → já está como ENVIADA no banco
+                        confirmacao = {
+                            "tipo": "status",
+                            "id": data["id"],
+                            "status": "ENVIADA"
+                        }
+                        clients[telefone].send(json.dumps(confirmacao).encode())
+
+                        print(f"[OFFLINE] {destinatario}")
+
+            # =========================
+            #  CONFIRMAÇÃO DE LEITURA
+            # =========================
+            elif data["tipo"] == "lido":
+                id_msg = data["id"]
+
+                # 🔥 atualiza no banco
+                database.atualizar_status(id_msg, "LIDO")
+
+                # 🔥 buscar remetente da mensagem
+                remetente = database.buscar_remetente(id_msg)
+
+                if remetente and remetente in clients:
+                    confirmacao = {
+                        "tipo": "status",
+                        "id": id_msg,
+                        "status": "LIDO"
+                    }
+
+                    clients[remetente].send(json.dumps(confirmacao).encode())
+
+                print(f"[LIDO] Mensagem {id_msg}")
 
     except Exception as e:
         print(f"[ERRO] {e}")
@@ -42,8 +129,12 @@ def handle_client(conn, addr):
     finally:
         print(f"[DESCONECTADO] {addr}")
         conn.close()
-        if telefone in clients:
-            del clients[telefone]
+
+        with clients_lock:
+            if telefone in clients:
+                del clients[telefone]
+
+
 def start_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((HOST, PORT))
@@ -56,5 +147,6 @@ def start_server():
 
         thread = threading.Thread(target=handle_client, args=(conn, addr))
         thread.start()
+
 
 start_server()
