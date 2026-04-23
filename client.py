@@ -14,7 +14,8 @@ def receive_messages(client):
 
             
             if data["tipo"] == "mensagem":
-                print(f"\n[{data['de']}] {data['conteudo']}")
+                nome = data.get("nome", data["de"])
+                print(f"\n[{nome}] {data['conteudo']}")
 
                 
                 confirmacao = {
@@ -31,7 +32,8 @@ def receive_messages(client):
             elif data["tipo"] == "historico":
                 print("\n--- HISTÓRICO ---")
                 for msg in data["mensagens"]:
-                    print(f"[{msg['de']}] {msg['conteudo']}")
+                    nome = msg.get("nome", msg["de"])
+                    print(f"[{nome}] {msg['conteudo']}")
                 print("-----------------\n")
 
         except:
@@ -45,7 +47,10 @@ def start_client():
     client.connect((HOST, PORT))
 
     telefone = input("Digite seu telefone: ")
-    client.send(telefone.encode())
+    nome = input("Digite seu nome: ")
+
+    
+    client.send(f"{telefone}|{nome}".encode())
 
     threading.Thread(target=receive_messages, args=(client,), daemon=True).start()
 

@@ -9,6 +9,7 @@ HOST = '0.0.0.0'
 PORT = 12345
 
 clients = {}
+users = {}  
 clients_lock = threading.Lock()
 
 
@@ -18,18 +19,24 @@ def handle_client(conn, addr):
     telefone = None
 
     try:
-        telefone = conn.recv(1024).decode()
+        
+        dados = conn.recv(1024).decode()
+        telefone, nome = dados.split("|")
 
         with clients_lock:
             clients[telefone] = conn
+            users[telefone] = nome
 
-        print(f"[USUÁRIO CONECTADO] {telefone}")
+        print(f"[USUÁRIO CONECTADO] {nome} ({telefone})")
 
         
         pendentes = database.buscar_pendentes(telefone)
 
         for msg in pendentes:
             try:
+                
+                msg["nome"] = users.get(msg["de"], msg["de"])
+
                 conn.send(json.dumps(msg).encode())
                 database.atualizar_status(msg["id"], "ENTREGUE")
 
@@ -61,6 +68,8 @@ def handle_client(conn, addr):
                 data["status"] = "ENVIADA"
 
                 
+                data["nome"] = users.get(telefone, telefone)
+
                 database.salvar_mensagem(data)
 
                 with clients_lock:
@@ -114,6 +123,10 @@ def handle_client(conn, addr):
 
                 conversa = database.buscar_conversa(telefone, outro)
 
+                
+                for msg in conversa:
+                    msg["nome"] = users.get(msg["de"], msg["de"])
+
                 resposta = {
                     "tipo": "historico",
                     "mensagens": conversa
@@ -133,6 +146,7 @@ def handle_client(conn, addr):
         with clients_lock:
             if telefone in clients:
                 del clients[telefone]
+                del users[telefone]
 
 
 def start_server():
