@@ -46,8 +46,8 @@ def start_client():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect((HOST, PORT))
 
-    telefone = input("Digite seu telefone: ")
-    nome = input("Digite seu nome: ")
+    telefone = input("Digite seu telefone: ").strip()
+    nome = input("Digite seu nome: ").strip()
 
     
     client.send(f"{telefone}|{nome}".encode())

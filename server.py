@@ -9,7 +9,7 @@ HOST = '0.0.0.0'
 PORT = 12345
 
 clients = {}
-users = {}  
+users = {}
 clients_lock = threading.Lock()
 
 
@@ -20,8 +20,11 @@ def handle_client(conn, addr):
 
     try:
         
-        dados = conn.recv(1024).decode()
+        dados = conn.recv(1024).decode().strip()
         telefone, nome = dados.split("|")
+
+        telefone = telefone.strip()
+        nome = nome.strip()
 
         with clients_lock:
             clients[telefone] = conn
@@ -34,7 +37,6 @@ def handle_client(conn, addr):
 
         for msg in pendentes:
             try:
-                
                 msg["nome"] = users.get(msg["de"], msg["de"])
 
                 conn.send(json.dumps(msg).encode())
@@ -53,7 +55,6 @@ def handle_client(conn, addr):
             except:
                 pass
 
-        
         while True:
             msg = conn.recv(1024).decode()
 
@@ -62,17 +63,22 @@ def handle_client(conn, addr):
 
             data = json.loads(msg)
 
+            #evita bug
+            if "para" in data:
+                data["para"] = data["para"].strip()
+
             
             if data["tipo"] == "mensagem":
                 destinatario = data["para"]
                 data["status"] = "ENVIADA"
-
-                
                 data["nome"] = users.get(telefone, telefone)
 
                 database.salvar_mensagem(data)
 
                 with clients_lock:
+                    print(f"[DEBUG] Destinatário: '{destinatario}'")
+                    print(f"[DEBUG] Clientes: {list(clients.keys())}")
+
                     if destinatario in clients:
                         data["status"] = "ENTREGUE"
 
@@ -119,11 +125,10 @@ def handle_client(conn, addr):
 
             
             elif data["tipo"] == "historico":
-                outro = data["com"]
+                outro = data["com"].strip()
 
                 conversa = database.buscar_conversa(telefone, outro)
 
-                
                 for msg in conversa:
                     msg["nome"] = users.get(msg["de"], msg["de"])
 
